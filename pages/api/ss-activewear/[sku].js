@@ -10,19 +10,25 @@ export default async function handler(req, res) {
       `${process.env.SS_API_USERNAME}:${process.env.SS_API_KEY}`
     ).toString('base64');
     
-    const response = await axios.get(
-      `${process.env.NEXT_PUBLIC_SS_API_BASE_URL}/products`, 
-      {
-        params: { 
-          style: '18000',
-          fields: 'sku,gtin,styleID,brandName,styleName,colorName,colorFrontImage,colorBackImage,colorSideImage,color1,color2,sizeName,customerPrice,qty,warehouses'
-        },
-        headers: {
-          'Authorization': `Basic ${auth}`,
-          'Content-Type': 'application/json'
-        }
+    const response = await axios({
+      method: 'get',
+      url: 'https://api.ssactivewear.com/v2/Products.aspx',
+      params: { 
+        Style: '18000',
+        Brand: 'Gildan'
+      },
+      headers: {
+        'Authorization': `Basic ${auth}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
       }
-    );
+    });
+
+    console.log('API Response:', {
+      status: response.status,
+      headers: response.headers,
+      data: response.data
+    });
 
     if (!response.data || response.data.length === 0) {
       return res.status(404).json({
@@ -32,32 +38,26 @@ export default async function handler(req, res) {
       });
     }
 
-    const processedProducts = response.data.map(product => ({
-      ...product,
-      price: product.customerPrice ? parseFloat(product.customerPrice) + 1.50 : null,
-      stock: product.qty || 0,
-      supplierSku: sku,
-      images: {
-        front: product.colorFrontImage ? `https://www.ssactivewear.com/${product.colorFrontImage}` : null,
-        back: product.colorBackImage ? `https://www.ssactivewear.com/${product.colorBackImage}` : null,
-        side: product.colorSideImage ? `https://www.ssactivewear.com/${product.colorSideImage}` : null
-      }
-    }));
-
-    console.log('Found products:', processedProducts.length);
-    res.status(200).json(processedProducts);
+    res.status(200).json(response.data);
 
   } catch (error) {
     console.error('API Error:', {
       status: error.response?.status,
       message: error.message,
-      data: error.response?.data
+      data: error.response?.data,
+      headers: error.response?.headers
     });
     
     res.status(500).json({
       error: 'API request failed',
       message: error.message,
-      details: error.response?.data || 'Unknown error'
+      details: error.response?.data,
+      requestInfo: {
+        url: 'https://api.ssactivewear.com/v2/Products.aspx',
+        style: '18000',
+        brand: 'Gildan',
+        hasAuth: !!process.env.SS_API_USERNAME && !!process.env.SS_API_KEY
+      }
     });
   }
 }
