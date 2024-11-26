@@ -4,18 +4,18 @@ export default async function handler(req, res) {
   try {
     const { sku } = req.query;
     
-    console.log('Starting API request for SKU:', sku);
+    console.log('Starting API request for style:', sku);
 
     const auth = Buffer.from(
       `${process.env.SS_API_USERNAME}:${process.env.SS_API_KEY}`
     ).toString('base64');
     
-    const styleResponse = await axios.get(
+    const response = await axios.get(
       `${process.env.NEXT_PUBLIC_SS_API_BASE_URL}/products`, 
       {
         params: { 
           style: '18000',
-          limit: 100
+          fields: 'sku,gtin,styleID,brandName,styleName,colorName,colorFrontImage,colorBackImage,colorSideImage,color1,color2,sizeName,customerPrice,qty,warehouses'
         },
         headers: {
           'Authorization': `Basic ${auth}`,
@@ -24,34 +24,24 @@ export default async function handler(req, res) {
       }
     );
 
-    const filteredProducts = styleResponse.data.filter(product => 
-      product.sku === sku || 
-      product.styleNumber === sku ||
-      product.id === sku
-    );
-
-    if (!filteredProducts || filteredProducts.length === 0) {
+    if (!response.data || response.data.length === 0) {
       return res.status(404).json({
         error: 'Product not found',
-        message: `No product found with SKU: ${sku}`,
-        requestedSku: sku,
-        styleNumber: '18000'
+        message: `No product found with style: 18000`,
+        requestedSku: sku
       });
     }
 
-    const processedProducts = filteredProducts.map(product => ({
+    const processedProducts = response.data.map(product => ({
       ...product,
-      sizes: Object.entries(product.sizes || {}).reduce((acc, [size, data]) => ({
-        ...acc,
-        [size]: {
-          ...data,
-          price: data.price ? parseFloat(data.price) + 1.50 : null
-        }
-      }), {}),
+      price: product.customerPrice ? parseFloat(product.customerPrice) + 1.50 : null,
+      stock: product.qty || 0,
       supplierSku: sku,
-      styleId: '372',
-      brandName: 'Gildan',
-      styleName: '18000'
+      images: {
+        front: product.colorFrontImage ? `https://www.ssactivewear.com/${product.colorFrontImage}` : null,
+        back: product.colorBackImage ? `https://www.ssactivewear.com/${product.colorBackImage}` : null,
+        side: product.colorSideImage ? `https://www.ssactivewear.com/${product.colorSideImage}` : null
+      }
     }));
 
     console.log('Found products:', processedProducts.length);
@@ -61,19 +51,13 @@ export default async function handler(req, res) {
     console.error('API Error:', {
       status: error.response?.status,
       message: error.message,
-      data: error.response?.data,
-      sku: req.query.sku
+      data: error.response?.data
     });
     
     res.status(500).json({
       error: 'API request failed',
       message: error.message,
-      details: error.response?.data || 'Unknown error',
-      requestInfo: {
-        sku: req.query.sku,
-        styleNumber: '18000',
-        brandName: 'Gildan'
-      }
+      details: error.response?.data || 'Unknown error'
     });
   }
 }
