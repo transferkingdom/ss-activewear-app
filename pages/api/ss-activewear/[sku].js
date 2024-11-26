@@ -1,37 +1,42 @@
 import axios from 'axios';
-import rateLimitMiddleware from '../../../lib/rateLimit';
 
 export default async function handler(req, res) {
   try {
     const { sku } = req.query;
     
-    // API credentials'ları kontrol et
-    if (!process.env.SS_API_USERNAME || !process.env.SS_API_KEY) {
-      throw new Error('API credentials are missing');
-    }
-
-    const baseURL = 'https://api.ssactivewear.com/v2';
-    const auth = Buffer.from(`${process.env.SS_API_USERNAME}:${process.env.SS_API_KEY}`).toString('base64');
-    
-    console.log('Making API request for SKU:', sku); // Debug log
-
-    const response = await axios.get(`${baseURL}/products`, {
-      params: { style: sku },
-      headers: {
-        'Authorization': `Basic ${auth}`,
-        'Content-Type': 'application/json'
-      }
+    console.log('API Request:', {
+      sku,
+      username: process.env.SS_API_USERNAME,
+      baseUrl: process.env.NEXT_PUBLIC_SS_API_BASE_URL
     });
+
+    const auth = Buffer.from(
+      `${process.env.SS_API_USERNAME}:${process.env.SS_API_KEY}`
+    ).toString('base64');
+    
+    const response = await axios.get(
+      `${process.env.NEXT_PUBLIC_SS_API_BASE_URL}/products`, 
+      {
+        params: { style: sku },
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
 
     res.status(200).json(response.data);
 
   } catch (error) {
-    console.error('API Error:', error.message); // Debug log
+    console.error('API Error:', {
+      message: error.message,
+      response: error.response?.data
+    });
     
     res.status(500).json({ 
-      error: 'Internal server error',
+      error: 'API request failed',
       message: error.message,
-      details: process.env.SS_API_USERNAME ? 'Credentials exist' : 'No credentials'
+      details: error.response?.data
     });
   }
 }
