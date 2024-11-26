@@ -4,11 +4,7 @@ export default async function handler(req, res) {
   try {
     const { sku } = req.query;
     
-    console.log('API Request:', {
-      sku,
-      username: process.env.SS_API_USERNAME,
-      baseUrl: process.env.NEXT_PUBLIC_SS_API_BASE_URL
-    });
+    console.log('Starting API request for SKU:', sku);
 
     const auth = Buffer.from(
       `${process.env.SS_API_USERNAME}:${process.env.SS_API_KEY}`
@@ -17,7 +13,10 @@ export default async function handler(req, res) {
     const response = await axios.get(
       `${process.env.NEXT_PUBLIC_SS_API_BASE_URL}/products`, 
       {
-        params: { style: sku },
+        params: { 
+          style: sku,
+          limit: 100
+        },
         headers: {
           'Authorization': `Basic ${auth}`,
           'Content-Type': 'application/json'
@@ -25,18 +24,43 @@ export default async function handler(req, res) {
       }
     );
 
+    if (!response.data || response.data.length === 0) {
+      return res.status(404).json({
+        error: 'Product not found',
+        message: `No product found with SKU: ${sku}`,
+        requestedSku: sku
+      });
+    }
+
+    console.log('API request successful, found products:', response.data.length);
     res.status(200).json(response.data);
 
   } catch (error) {
     console.error('API Error:', {
+      status: error.response?.status,
       message: error.message,
-      response: error.response?.data
+      data: error.response?.data,
+      sku: req.query.sku
     });
     
-    res.status(500).json({ 
-      error: 'API request failed',
-      message: error.message,
-      details: error.response?.data
-    });
+    if (error.response?.status === 404) {
+      res.status(404).json({
+        error: 'Product not found',
+        message: `No product found with SKU: ${req.query.sku}`,
+        details: error.response.data
+      });
+    } else if (error.response?.status === 401) {
+      res.status(401).json({
+        error: 'Authentication failed',
+        message: 'Invalid API credentials',
+        details: error.response.data
+      });
+    } else {
+      res.status(500).json({
+        error: 'API request failed',
+        message: error.message,
+        details: error.response?.data || 'Unknown error'
+      });
+    }
   }
 }
