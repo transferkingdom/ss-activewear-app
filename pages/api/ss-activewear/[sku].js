@@ -3,6 +3,7 @@ import axios from 'axios';
 export default async function handler(req, res) {
   try {
     const { sku } = req.query;
+    const brand = 'Gildan'; // Marka sabit olarak ayarlandı
     
     // API kimlik bilgilerini kontrol et
     if (!process.env.SS_API_USERNAME || !process.env.SS_API_KEY) {
@@ -14,13 +15,19 @@ export default async function handler(req, res) {
       `${process.env.SS_API_USERNAME}:${process.env.SS_API_KEY}`
     ).toString('base64');
 
+    // URL'yi oluştur ve encode et
+    const encodedBrand = encodeURIComponent(brand);
+    const encodedStyle = encodeURIComponent(sku);
+    const url = `https://api.ssactivewear.com/v2/products/?style=${encodedStyle}&brand=${encodedBrand}`;
+
     // API isteğini yap
     const response = await axios({
       method: 'get',
-      url: `https://api.ssactivewear.com/v2/products/?style=${sku}`,
+      url: url,
       headers: {
         'Authorization': `Basic ${auth}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
       }
     });
 
@@ -32,21 +39,37 @@ export default async function handler(req, res) {
     console.error('SS Activewear API Hatası:', {
       message: error.message,
       response: error.response?.data,
-      status: error.response?.status
+      status: error.response?.status,
+      url: error.config?.url
     });
 
     // API'den gelen hata yanıtını kontrol et
     if (error.response?.status === 404) {
       return res.status(404).json({
-        error: 'Ürün bulunamadı',
-        details: error.response.data
+        error: 'API request failed',
+        message: error.message,
+        details: error.response.data,
+        requestInfo: {
+          url: 'https://api.ssactivewear.com/v2/products',
+          style: sku,
+          brand: brand,
+          credentials: {
+            username: process.env.SS_API_USERNAME ? 'Set' : 'Not set',
+            key: process.env.SS_API_KEY ? 'Set' : 'Not set'
+          }
+        }
       });
     }
 
     // Genel hata yanıtı
     return res.status(500).json({
       error: 'API isteği başarısız oldu',
-      message: error.message
+      message: error.message,
+      requestInfo: {
+        url: error.config?.url,
+        style: sku,
+        brand: brand
+      }
     });
   }
 }
