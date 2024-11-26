@@ -1,4 +1,5 @@
 import React from 'react';
+import Image from 'next/image'; // Next.js Image bileşenini ekleyelim
 
 export default function ProductDetails({ data }) {
   return (
@@ -57,7 +58,7 @@ export default function ProductDetails({ data }) {
         <div className="grid grid-cols-2 gap-4">
           <p><span className="font-semibold">Koli Adedi:</span> {data.shipping.caseQuantity}</p>
           <p><span className="font-semibold">Koli Ağırlığı:</span> {data.shipping.caseWeight} kg</p>
-          <p><span className="font-semibold">Boyutlar:</span> {data.shipping.dimensions.width}" x {data.shipping.dimensions.length}" x {data.shipping.dimensions.height}"</p>
+          <p><span className="font-semibold">Boyutlar:</span> {data.shipping.dimensions.width} x {data.shipping.dimensions.length} x {data.shipping.dimensions.height}</p>
         </div>
       </div>
     </div>
