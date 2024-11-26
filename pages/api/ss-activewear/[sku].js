@@ -10,11 +10,11 @@ export default async function handler(req, res) {
       `${process.env.SS_API_USERNAME}:${process.env.SS_API_KEY}`
     ).toString('base64');
     
-    const response = await axios.get(
-      `${process.env.NEXT_PUBLIC_SS_API_BASE_URL}/products`, 
+    const searchResponse = await axios.get(
+      `${process.env.NEXT_PUBLIC_SS_API_BASE_URL}/products/search`,
       {
         params: { 
-          style: sku,
+          q: sku,
           limit: 100
         },
         headers: {
@@ -24,7 +24,7 @@ export default async function handler(req, res) {
       }
     );
 
-    if (!response.data || response.data.length === 0) {
+    if (!searchResponse.data || searchResponse.data.length === 0) {
       return res.status(404).json({
         error: 'Product not found',
         message: `No product found with SKU: ${sku}`,
@@ -32,8 +32,20 @@ export default async function handler(req, res) {
       });
     }
 
-    console.log('API request successful, found products:', response.data.length);
-    res.status(200).json(response.data);
+    console.log('API request successful, found products:', searchResponse.data.length);
+    
+    const processedProducts = searchResponse.data.map(product => ({
+      ...product,
+      sizes: Object.entries(product.sizes || {}).reduce((acc, [size, data]) => ({
+        ...acc,
+        [size]: {
+          ...data,
+          price: data.price ? parseFloat(data.price) + 1.50 : null
+        }
+      }), {})
+    }));
+
+    res.status(200).json(processedProducts);
 
   } catch (error) {
     console.error('API Error:', {
@@ -59,7 +71,11 @@ export default async function handler(req, res) {
       res.status(500).json({
         error: 'API request failed',
         message: error.message,
-        details: error.response?.data || 'Unknown error'
+        details: error.response?.data || 'Unknown error',
+        requestInfo: {
+          sku,
+          baseUrl: process.env.NEXT_PUBLIC_SS_API_BASE_URL
+        }
       });
     }
   }
