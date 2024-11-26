@@ -4,19 +4,36 @@ export default async function handler(req, res) {
   try {
     const { sku } = req.query;
     
+    // API kimlik bilgilerini kontrol et
     if (!process.env.SS_API_USERNAME || !process.env.SS_API_KEY) {
-      throw new Error('API kimlik bilgileri eksik');
+      console.error('API Kimlik Bilgileri Eksik:', {
+        username: process.env.SS_API_USERNAME ? 'Mevcut' : 'Eksik',
+        key: process.env.SS_API_KEY ? 'Mevcut' : 'Eksik'
+      });
+      
+      return res.status(500).json({
+        error: 'API yapılandırma hatası',
+        message: 'API kimlik bilgileri eksik veya hatalı'
+      });
     }
 
+    // Basic auth için kimlik bilgilerini hazırla
     const auth = Buffer.from(
       `${process.env.SS_API_USERNAME}:${process.env.SS_API_KEY}`
     ).toString('base64');
 
-    // Doğrudan ürün numarası ile sorgulama yapalım
-    const url = `https://api.ssactivewear.com/v2/products/${sku}`;
-    
-    console.log('API İsteği yapılıyor:', url);
+    // API endpoint'ini oluştur
+    const baseUrl = 'https://api.ssactivewear.com/v2';
+    const endpoint = `/products/${sku}`;
+    const url = `${baseUrl}${endpoint}`;
 
+    console.log('API İsteği Başlatılıyor:', {
+      url: url,
+      sku: sku,
+      hasAuth: !!auth
+    });
+
+    // API isteğini yap
     const response = await axios({
       method: 'get',
       url: url,
@@ -24,49 +41,64 @@ export default async function handler(req, res) {
         'Authorization': `Basic ${auth}`,
         'Content-Type': 'application/json',
         'Accept': 'application/json'
-      }
+      },
+      // Timeout ekle
+      timeout: 10000,
+      // Hata detaylarını al
+      validateStatus: null
     });
 
-    // Yanıt boş ise veya data yoksa
-    if (!response.data || response.data.length === 0) {
+    console.log('API Yanıtı:', {
+      status: response.status,
+      hasData: !!response.data,
+      dataLength: Array.isArray(response.data) ? response.data.length : 'N/A'
+    });
+
+    // Yanıt kontrolü
+    if (response.status !== 200) {
+      throw new Error(`API ${response.status} durum kodu döndürdü`);
+    }
+
+    if (!response.data || (Array.isArray(response.data) && response.data.length === 0)) {
       return res.status(404).json({
         error: 'Ürün bulunamadı',
-        requestedSku: sku
+        sku: sku,
+        timestamp: new Date().toISOString()
       });
     }
 
+    // Başarılı yanıt
     return res.status(200).json(response.data);
 
   } catch (error) {
+    // Detaylı hata loglaması
     console.error('API Hatası:', {
       message: error.message,
-      status: error.response?.status,
-      data: error.response?.data,
-      url: error.config?.url
+      stack: error.stack,
+      config: {
+        url: error.config?.url,
+        method: error.config?.method,
+        headers: error.config?.headers ? 'Mevcut' : 'Eksik'
+      },
+      response: {
+        status: error.response?.status,
+        data: error.response?.data,
+        headers: error.response?.headers
+      },
+      timestamp: new Date().toISOString()
     });
 
-    // Özel hata mesajları
-    if (error.response?.status === 404) {
-      return res.status(404).json({
-        error: 'Ürün bulunamadı',
-        details: error.response.data,
-        requestedSku: sku
-      });
-    }
-
-    if (error.response?.status === 401) {
-      return res.status(401).json({
-        error: 'API kimlik doğrulama hatası',
-        message: 'Lütfen API kimlik bilgilerini kontrol edin'
-      });
-    }
-
+    // Hata yanıtı
     return res.status(500).json({
-      error: 'API hatası',
-      message: error.message,
+      error: 'API isteği başarısız',
+      details: {
+        message: error.message,
+        status: error.response?.status || 500,
+        timestamp: new Date().toISOString()
+      },
       requestInfo: {
         sku: sku,
-        endpoint: url
+        url: error.config?.url || 'URL bilgisi yok'
       }
     });
   }
