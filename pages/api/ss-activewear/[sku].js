@@ -10,11 +10,11 @@ export default async function handler(req, res) {
       `${process.env.SS_API_USERNAME}:${process.env.SS_API_KEY}`
     ).toString('base64');
     
-    const searchResponse = await axios.get(
-      `${process.env.NEXT_PUBLIC_SS_API_BASE_URL}/products/search`,
+    const response = await axios.get(
+      `${process.env.NEXT_PUBLIC_SS_API_BASE_URL}/products`,
       {
         params: { 
-          q: sku,
+          style: sku.trim(),
           limit: 100
         },
         headers: {
@@ -24,17 +24,15 @@ export default async function handler(req, res) {
       }
     );
 
-    if (!searchResponse.data || searchResponse.data.length === 0) {
+    if (!response.data || response.data.length === 0) {
       return res.status(404).json({
         error: 'Product not found',
-        message: `No product found with SKU: ${sku}`,
+        message: `No product found with style number: ${sku}`,
         requestedSku: sku
       });
     }
 
-    console.log('API request successful, found products:', searchResponse.data.length);
-    
-    const processedProducts = searchResponse.data.map(product => ({
+    const processedProducts = response.data.map(product => ({
       ...product,
       sizes: Object.entries(product.sizes || {}).reduce((acc, [size, data]) => ({
         ...acc,
@@ -45,6 +43,7 @@ export default async function handler(req, res) {
       }), {})
     }));
 
+    console.log('Found products:', processedProducts.length);
     res.status(200).json(processedProducts);
 
   } catch (error) {
@@ -58,14 +57,14 @@ export default async function handler(req, res) {
     if (error.response?.status === 404) {
       res.status(404).json({
         error: 'Product not found',
-        message: `No product found with SKU: ${req.query.sku}`,
-        details: error.response.data
+        message: `No product found with style number: ${req.query.sku}`,
+        details: error.response?.data
       });
     } else if (error.response?.status === 401) {
       res.status(401).json({
         error: 'Authentication failed',
         message: 'Invalid API credentials',
-        details: error.response.data
+        details: error.response?.data
       });
     } else {
       res.status(500).json({
@@ -73,7 +72,7 @@ export default async function handler(req, res) {
         message: error.message,
         details: error.response?.data || 'Unknown error',
         requestInfo: {
-          sku,
+          sku: req.query.sku,
           baseUrl: process.env.NEXT_PUBLIC_SS_API_BASE_URL
         }
       });
