@@ -10,11 +10,11 @@ export default async function handler(req, res) {
       `${process.env.SS_API_USERNAME}:${process.env.SS_API_KEY}`
     ).toString('base64');
     
-    const response = await axios.get(
-      `${process.env.NEXT_PUBLIC_SS_API_BASE_URL}/products`,
+    const styleResponse = await axios.get(
+      `${process.env.NEXT_PUBLIC_SS_API_BASE_URL}/products`, 
       {
         params: { 
-          style: sku.trim(),
+          style: '18000',
           limit: 100
         },
         headers: {
@@ -24,15 +24,22 @@ export default async function handler(req, res) {
       }
     );
 
-    if (!response.data || response.data.length === 0) {
+    const filteredProducts = styleResponse.data.filter(product => 
+      product.sku === sku || 
+      product.styleNumber === sku ||
+      product.id === sku
+    );
+
+    if (!filteredProducts || filteredProducts.length === 0) {
       return res.status(404).json({
         error: 'Product not found',
-        message: `No product found with style number: ${sku}`,
-        requestedSku: sku
+        message: `No product found with SKU: ${sku}`,
+        requestedSku: sku,
+        styleNumber: '18000'
       });
     }
 
-    const processedProducts = response.data.map(product => ({
+    const processedProducts = filteredProducts.map(product => ({
       ...product,
       sizes: Object.entries(product.sizes || {}).reduce((acc, [size, data]) => ({
         ...acc,
@@ -40,7 +47,11 @@ export default async function handler(req, res) {
           ...data,
           price: data.price ? parseFloat(data.price) + 1.50 : null
         }
-      }), {})
+      }), {}),
+      supplierSku: sku,
+      styleId: '372',
+      brandName: 'Gildan',
+      styleName: '18000'
     }));
 
     console.log('Found products:', processedProducts.length);
@@ -54,28 +65,15 @@ export default async function handler(req, res) {
       sku: req.query.sku
     });
     
-    if (error.response?.status === 404) {
-      res.status(404).json({
-        error: 'Product not found',
-        message: `No product found with style number: ${req.query.sku}`,
-        details: error.response?.data
-      });
-    } else if (error.response?.status === 401) {
-      res.status(401).json({
-        error: 'Authentication failed',
-        message: 'Invalid API credentials',
-        details: error.response?.data
-      });
-    } else {
-      res.status(500).json({
-        error: 'API request failed',
-        message: error.message,
-        details: error.response?.data || 'Unknown error',
-        requestInfo: {
-          sku: req.query.sku,
-          baseUrl: process.env.NEXT_PUBLIC_SS_API_BASE_URL
-        }
-      });
-    }
+    res.status(500).json({
+      error: 'API request failed',
+      message: error.message,
+      details: error.response?.data || 'Unknown error',
+      requestInfo: {
+        sku: req.query.sku,
+        styleNumber: '18000',
+        brandName: 'Gildan'
+      }
+    });
   }
 }
