@@ -2,7 +2,7 @@ import axios from 'axios';
 
 export default async function handler(req, res) {
   try {
-    const { sku } = req.query; // Bu aslında style ID olacak
+    const { sku } = req.query;
     
     if (!process.env.SS_API_USERNAME || !process.env.SS_API_KEY) {
       throw new Error('API kimlik bilgileri eksik');
@@ -12,7 +12,6 @@ export default async function handler(req, res) {
       `${process.env.SS_API_USERNAME}:${process.env.SS_API_KEY}`
     ).toString('base64');
 
-    // Style ID ile ürünleri getir
     const url = `https://api.ssactivewear.com/v2/products/?style=${sku}`;
     
     console.log('API İsteği:', url);
@@ -27,12 +26,19 @@ export default async function handler(req, res) {
       }
     });
 
-    // Yanıtı grupla ve düzenle
-    const products = response.data;
-    const styleInfo = products[0]; // Ana ürün bilgileri
+    if (!response.data || !Array.isArray(response.data) || response.data.length === 0) {
+      return res.status(404).json({
+        error: 'Ürün bulunamadı',
+        message: 'Style ID için ürün bulunamadı'
+      });
+    }
 
-    // Renk ve beden varyantlarını grupla
+    const products = response.data;
+    const styleInfo = products[0];
+
     const variants = products.reduce((acc, product) => {
+      if (!product.colorName || !product.colorCode) return acc;
+
       const colorKey = `${product.colorName}-${product.colorCode}`;
       
       if (!acc[colorKey]) {
@@ -47,17 +53,18 @@ export default async function handler(req, res) {
         };
       }
 
-      acc[colorKey].sizes.push({
-        size: product.sizeName,
-        sku: product.sku,
-        price: product.customerPrice,
-        stock: product.qty
-      });
+      if (product.sizeName) {
+        acc[colorKey].sizes.push({
+          size: product.sizeName,
+          sku: product.sku,
+          price: product.customerPrice,
+          stock: product.qty
+        });
+      }
 
       return acc;
     }, {});
 
-    // Yanıtı formatla
     const formattedResponse = {
       styleId: styleInfo.styleID,
       styleName: styleInfo.styleName,
@@ -66,13 +73,16 @@ export default async function handler(req, res) {
       variants: Object.values(variants)
     };
 
+    console.log('Formatlanmış Yanıt:', formattedResponse);
+
     return res.status(200).json(formattedResponse);
 
   } catch (error) {
     console.error('API Hatası:', error);
     return res.status(500).json({
       error: 'API hatası',
-      message: error.message
+      message: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 }
